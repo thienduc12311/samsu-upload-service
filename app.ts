@@ -7,7 +7,7 @@ import { configureRoutes } from './routes';
 require('dotenv').config();
 const app: Express = express();
 const { port } = config;
-app.use(cors());
+app.use(cors('*'));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
