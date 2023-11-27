@@ -57,7 +57,8 @@ export function configureRoutes(config: AppConfig) {
     // Add a new route to request a presigned URL for uploading to Digital Ocean
     router.get('/presigned-url', checkCredentialsMiddleware(config), (req, res) => {
         // Generate a unique filename for the object
-        const contentName = req.query.filename;
+        const contentName = req.query.filename as string;
+        const isImage = /\.(jpg|jpeg|png|gif)$/i.test(contentName as string);
         const uniqueFilename = uuidv4();
         const expirationInSeconds = Number(process.env.PRESIGNED_URL_EXPIRATION_TIME) || 120; // 2min
 
@@ -67,7 +68,7 @@ export function configureRoutes(config: AppConfig) {
             Fields: {
                 key: `assets/${uniqueFilename}_${(contentName as string).replace(/\s/g, "")}`,
                 acl: 'public-read', // Set ACL as needed
-                'Content-Type': 'multipart/form-data', // Set content type as needed
+                'Content-Type': isImage ? `image/${contentName.substring(contentName.lastIndexOf('.') + 1)}` : 'multipart/form-data', // Set content type as needed
             },
             Conditions: [],
         };
