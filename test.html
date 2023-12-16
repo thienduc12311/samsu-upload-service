@@ -18,7 +18,7 @@
         const fileInput = document.getElementById('file-input');
         const uploadButton = document.getElementById('upload-button');
         const statusMessage = document.getElementById('status');
-        const bearerToken = 'Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI2IiwiaWF0IjoxNjk4NDU1Njk3LCJleHAiOjE2OTkwNjA0OTd9.Ik1YY_KSlqe3mv6K4wx7q6Tr0ackaahzwb2mKY-sKmoyp-CkTr8SZjAiCQ80JWhkhgw1QvCH0E7npiA2-e49gw';
+            const bearerToken = 'Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI2IiwiaWF0IjoxNzAyMzQyMTMzLCJleHAiOjE3MDI5NDY5MzN9.wpbarb_Oapl68oXpXbb1gsR2tVzUtE_BBFos-KK4ZeAjG2n8qXm6QQEMPW7c4wLpXFzNiiiEtKO4Y99zZPs0mg';
 
         uploadButton.addEventListener('click', async () => {
             const file = fileInput.files[0];
@@ -48,7 +48,7 @@
                             formData.append(field, preSignedPostData.fields[field]);
                         }
                         formData.append('file', file);
-
+                        console.log(file);
 
                         // Send the POST request to the pre-signed URL
                         const xhr = new XMLHttpRequest();
