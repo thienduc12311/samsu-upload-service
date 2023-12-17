@@ -27,7 +27,7 @@ app.use(morgan('combined'));
 
 app.use('/', routes);
 async function generatePDF(htmlContent) {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
 
     // Set page size to A4 and landscape orientation
