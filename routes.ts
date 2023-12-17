@@ -9,7 +9,6 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { AppConfig } from './config';
 import { checkCredentialsMiddleware } from './middleware';
-
 export function configureRoutes(config: AppConfig) {
     const router = Router();
     const s3 = new S3Client({
