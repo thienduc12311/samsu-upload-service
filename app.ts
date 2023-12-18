@@ -20,7 +20,19 @@ const { port } = config;
 app.use(cors('*'));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+export function getFormattedDateFromTimestamp(timestamp: number) {
+    const date = new Date(timestamp);
+    const gmtPlus7Date = new Date(date.getTime() + (7 * 60 * 60 * 1000));
 
+    const options: Intl.DateTimeFormatOptions = {
+        weekday: 'short', // Short weekday name (e.g., "Thu")
+        day: 'numeric',    // Numeric day of the month (e.g., "19")
+        month: 'long',     // Long month name (e.g., "December")
+        year: 'numeric',   // Numeric year (e.g., "2023")
+    };
+
+    return gmtPlus7Date.toLocaleString('en-US', options);
+}
 const routes = configureRoutes(config);
 
 app.use(morgan('combined'));
@@ -61,7 +73,7 @@ app.post('/generate-participant-certificates', async (req, res) => {
                 rollnumber: participant.rollnumber, // Update with your actual property names
                 achievement: `Certificate for ${eventTitle}`,
                 description: `${departmentName} Department`,
-                date: eventDate,
+                date: getFormattedDateFromTimestamp(eventDate),
             };
 
             // Read HTML template file
@@ -108,6 +120,64 @@ async function uploadToS3(fileBuffer, filename) {
 
     await s3.upload(params).promise();
 }
+
+app.post('/generate-achievement-certificates', async (req, res) => {
+    try {
+        const { eventTitle, departmentName, eventDate, taskList } = req.body;
+
+        const certificatePromises = taskList.map(async (task) => {
+            // Process each assignee for the task
+            const assigneeCertificates = task.assignees.map(async (assignee) => {
+                const certificateData = {
+                    name: assignee.name, // Update with your actual property names
+                    rollnumber: assignee.rollnumber, // Update with your actual property names
+                    achievement: `Certificate for ${eventTitle}`,
+                    description: `Successfully Completed Task: ${task.task.name}`,
+                    date: getFormattedDateFromTimestamp(eventDate),
+                };
+
+                // Read HTML template file
+                const htmlTemplate = fs.readFileSync('achievement.html', 'utf-8');
+
+                // Replace placeholders with actual data
+                const filledHTML = htmlTemplate.replace(/{{(.*?)}}/g, (match, p1) => certificateData[p1.trim()] || match);
+
+                // Generate a unique filename for the certificate
+                const certificateFilename = `certificate_${uuidv4()}.pdf`;
+
+                // Generate PDF
+                const pdfBuffer = await generatePDF(filledHTML);
+
+                // Upload PDF to S3 bucket
+                await uploadToS3(pdfBuffer, certificateFilename);
+
+                // Get the public URL of the uploaded file
+                const certificateUrl = await getS3ObjectUrl(certificateFilename);
+
+                return {
+                    rollnumber: assignee.rollnumber,
+                    certificateUrl,
+                };
+            });
+
+            // Wait for all assignee promises to resolve for a task
+            const taskCertificates = await Promise.all(assigneeCertificates);
+
+            return taskCertificates;
+        });
+
+        // Wait for all task promises to resolve
+        const achievementCertificates = await Promise.all(certificatePromises);
+
+        // Flatten the nested array structure
+        const flattenedCertificates = achievementCertificates.flat();
+
+        res.json(flattenedCertificates);
+    } catch (error) {
+        console.error('Error generating achievement certificates:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});
 
 // Function to get the public URL of an S3 object
 async function getS3ObjectUrl(filename) {
