@@ -9,6 +9,9 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { AppConfig } from './config';
 import { checkCredentialsMiddleware } from './middleware';
+
+const presignedUrlsMap = new Map<string, { uploaded: boolean; timerId: NodeJS.Timeout }>();
+
 export function configureRoutes(config: AppConfig) {
     const router = Router();
     const s3 = new S3Client({
@@ -49,6 +52,25 @@ export function configureRoutes(config: AppConfig) {
             }
         },
     });
+    router.post('/callback', checkCredentialsMiddleware(config), (req, res) => {
+        const { url } = req.body;
+
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({ error: 'Invalid URL' });
+        }
+
+        const urlData = presignedUrlsMap.get(url);
+
+        if (urlData) {
+            // Update upload status
+            urlData.uploaded = true;
+            // Clear the timer as the callback was received
+            clearTimeout(urlData.timerId);
+            res.json({ message: 'Callback received and status updated' });
+        } else {
+            res.status(404).json({ error: 'URL not found' });
+        }
+    });
 
     router.get('/', checkCredentialsMiddleware(config), (req, res) => {
         res.send('SAMSU upload service');
@@ -73,6 +95,9 @@ export function configureRoutes(config: AppConfig) {
         };
 
         const preSignedPost = s3Bucket.createPresignedPost(params);
+        const urlData = { uploaded: false, timerId: setTimeout(() => handleTimeout(preSignedPost.url), 5 * 60 * 1000) };
+        presignedUrlsMap.set(preSignedPost.url, urlData);
+
         res.json(preSignedPost);
     });
     router.post('/upload', checkCredentialsMiddleware(config), upload.array('files', config.maximumFilesAllowed), (req, res) => {
@@ -102,6 +127,27 @@ export function configureRoutes(config: AppConfig) {
             res.status(500).json({ error: 'Failed to delete files' });
         }
     });
+    // Function to handle timeout and delete the object if not uploaded
+    async function handleTimeout(url: string) {
+        const urlData = presignedUrlsMap.get(url);
+
+        if (urlData && !urlData.uploaded) {
+            try {
+                // Extract the key from the URL (assuming it is the last path component)
+                const key = url.split('/').pop();
+
+                // Delete the object from the S3 bucket
+                await s3Bucket.deleteObject({ Bucket: config.bucketName, Key: key }).promise();
+
+                console.log(`Deleted object associated with URL: ${url}`);
+            } catch (err) {
+                console.error(`Failed to delete object associated with URL: ${url}`, err);
+            } finally {
+                // Remove entry from the map
+                presignedUrlsMap.delete(url);
+            }
+        }
+    }
 
     return router;
 }
